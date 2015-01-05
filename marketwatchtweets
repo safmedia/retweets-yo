@@ -1,0 +1,86 @@
+#!/usr/bin/python
+
+#-----------------------------------------------------------------------
+# yo-retweets
+#  - Yo a tweet that gets more than X retweets 
+#-----------------------------------------------------------------------
+
+from twitter import *
+import os
+import urlparse
+import redis
+import requests
+import string
+
+#redis_url = urlparse.urlparse(os.environ.get('REDISCLOUD_URL'))
+redis = redis.Redis(host='localhost', port=6379, password=None)
+
+# these tokens are necessary for user authentication
+# (created within the twitter developer API pages)
+consumer_key = "Vr1NI3tDOSslItd7N7SoN4CFM"
+consumer_secret = "PRkt4lXgC1Svmrd5JXt47xCapsI8ah0uN7KndZogvDkhHJeXRH"
+access_key = "624413-3mill0g1WfQvDuxk7o4K5T7uFoMu04z603IPvMMCPXp"
+access_secret = "P25HFjbovP8cafDyZKNlYIheLbosGufB0m8w8xuxTdfGu"
+
+# create twitter API object
+auth = OAuth(access_key, access_secret, consumer_key, consumer_secret)
+twitter = Twitter(auth = auth)
+
+class Account:
+
+	def __init__(self, twitter_handle, yo_api_token, threshold):
+		self.twitter_handle = twitter_handle
+		self.yo_api_token = yo_api_token
+		self.threshold = threshold
+
+# twitter accounts to track,  the Yo API token to Yo from, and the threshold of how many retweets
+accounts = [
+	Account(twitter_handle='MarketWatch', yo_api_token='7446959c-5464-4109-9eb7-ea1a501d0f57', threshold=50)
+]
+
+def getLinkSubstr(tweetStr):
+	startIdx = string.find(tweetStr, 't.co/')
+
+	if (startIdx < -1):
+		return None
+	endIdx = string.find(tweetStr, ' ', startIdx)
+
+	if (endIdx < -1):
+		return None
+	return tweetStr[startIdx:endIdx]
+
+for account in accounts:
+
+	print 'running for ' + account.twitter_handle
+
+	twitter_handle = account.twitter_handle
+
+	# perform a basic search 
+	# twitter API docs: https://dev.twitter.com/docs/api/1/get/search
+	results = twitter.statuses.user_timeline(screen_name = twitter_handle, include_rts = False)
+
+	print 'found ' + str(len(results)) + ' statuses'
+
+	for tweet in results:
+		if tweet['retweet_count'] > account.threshold:
+			print 'found a tweet'
+			tweet_url = 'http://twitter.com/' + twitter_handle + '/status/' + tweet['id_str']
+			if redis.get(tweet_url):
+				print 'already Yoed this url'
+				continue  # already Yoed this url
+
+			tweetStr = tweet['text']
+			print tweetStr
+			if (getLinkSubstr(tweetStr)):
+				linkToYo = getLinkSubstr(tweetStr)
+			else:
+				linkToYo = tweet_url
+
+			print linkToYo
+			requests.post("http://api.justyo.co/yoall/", data={'api_token': account.yo_api_token, 'link': linkToYo})
+			#requests.post("http://api.justyo.co/yo/", data={'api_token': account.yo_api_token, 'link': linkToYo, 'username': 'sallyfrench'})
+			#redis.set(tweet_url, 'sent')
+			break
+
+
+
