@@ -48,7 +48,7 @@ def getLinkSubstr(tweetStr):
 	if (endIdx < -1):
 		return None
 	return tweetStr[startIdx:endIdx]
-
+	
 for account in accounts:
 
 	print 'running for ' + account.twitter_handle
